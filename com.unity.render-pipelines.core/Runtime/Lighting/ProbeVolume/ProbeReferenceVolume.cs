@@ -286,6 +286,10 @@ namespace UnityEngine.Experimental.Rendering
         /// Noise to be applied to the sampling position. It can hide seams issues between subdivision levels, but introduces noise.
         /// </summary>
         public float samplingNoise;
+        /// <summary>
+        /// Global probe volumes weight. Allows for fading out probe volumes influence falling back to ambient probe.
+        /// </summary>
+        public float weight;
     }
 
     /// <summary>
@@ -1310,6 +1314,7 @@ namespace UnityEngine.Experimental.Rendering
             shaderVars._MinBrickSize = MinBrickSize();
             shaderVars._IndexChunkSize = ProbeBrickIndex.kIndexChunkSize;
             shaderVars._CellInMeters = MaxBrickSize();
+            shaderVars._Weight = parameters.weight;
 
             ConstantBuffer.PushGlobal(cmd, shaderVars, m_CBShaderID);
         }
