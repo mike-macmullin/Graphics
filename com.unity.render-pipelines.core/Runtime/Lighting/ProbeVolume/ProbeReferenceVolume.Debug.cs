@@ -75,7 +75,7 @@ namespace UnityEngine.Experimental.Rendering
             }
         }
 
-        void InitializeDebug(Mesh debugProbeMesh, Shader debugProbeShader)
+        void InitializeDebug(ProbeVolumeSystemParameters parameters)
         {
             if (parameters.supportsRuntimeDebug)
             {
@@ -83,8 +83,8 @@ namespace UnityEngine.Experimental.Rendering
                 m_DebugMaterial = CoreUtils.CreateEngineMaterial(parameters.probeDebugShader);
                 m_DebugMaterial.enableInstancing = true;
 
-                m_DebugOffsetMesh = debugOffsetMesh;
-                m_DebugOffsetMaterial = CoreUtils.CreateEngineMaterial(debugOffsetShader);
+                m_DebugOffsetMesh = parameters.offsetDebugMesh;
+                m_DebugOffsetMaterial = CoreUtils.CreateEngineMaterial(parameters.offsetDebugShader);
                 m_DebugOffsetMaterial.enableInstancing = true;
 
                 // Hard-coded colors for now.
