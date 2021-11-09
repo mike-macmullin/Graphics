@@ -66,6 +66,19 @@ float ComputeVisibility(float3 position, float3 normal, float3 inputSample)
 
 #endif // _ENABLE_SHADOW_MATTE
 
+void WriteAOVs(inout PathIntersection pathIntersection, SurfaceData surfaceData, BuiltinData builtinData)
+{
+    float3 albedo = 0.0;
+
+#ifdef DEBUGVIEW_LIT_SURFACEDATA_BASE_COLOR
+    bool foo;
+    GetGeneratedSurfaceDataDebug(DEBUGVIEW_LIT_SURFACEDATA_BASE_COLOR, surfaceData, albedo, foo);
+#endif
+
+    SetAlbedo(pathIntersection, albedo);
+    SetNormal(pathIntersection, surfaceData.normalWS);
+}
+
 // Function responsible for surface scattering
 void ComputeSurfaceScattering(inout PathIntersection pathIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes, float4 inputSample)
 {
@@ -276,6 +289,11 @@ void ComputeSurfaceScattering(inout PathIntersection pathIntersection : SV_RayPa
     #endif
 
 #endif // SHADER_UNLIT
+
+    if (currentDepth == 0)
+    {
+        WriteAOVs(pathIntersection, surfaceData, builtinData);
+    }
 }
 
 // Generic function that handles one scattering event (a vertex along the full path), can be either:

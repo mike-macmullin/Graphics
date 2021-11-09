@@ -51,8 +51,14 @@ namespace UnityEngine.Rendering.HighDefinition
         [Tooltip("Defines the maximum, post-exposed luminance computed for indirect path segments. Lower values help against noise and fireflies (very bright pixels), but introduce bias by darkening the overall result. Increase this value if your image looks too dark.")]
         public MinFloatParameter maximumIntensity = new MinFloatParameter(10f, 0f);
 
+#if ENABLE_UNITY_DENOISERS
         [Tooltip("Enables denoising for the converged path tracer frame")]
-        public BoolParameter denoise = new BoolParameter(false);
+        public DenoiserParameter denoiser = new DenoiserParameter(DenoiserType.None); // new BoolParameter(false);
+#endif
+
+        [Tooltip("Enables denoising with albedo and normal AOVs")]
+        public BoolParameter useAOVs = new BoolParameter(false);
+
 
         /// <summary>
         /// Defines the number of tiles (X: width, Y: height) and the indices of the current tile (Z: i in [0, width[, W: j in [0, height[) for interleaved tiled rendering.
@@ -285,6 +291,9 @@ namespace UnityEngine.Rendering.HighDefinition
             public TextureHandle output;
             public TextureHandle sky;
 
+            public TextureHandle albedoAOV;
+            public TextureHandle normalAOV;
+            
 #if ENABLE_SENSOR_SDK
             public Action<UnityEngine.Rendering.CommandBuffer> prepareDispatchRays;
 #endif
@@ -326,6 +335,12 @@ namespace UnityEngine.Rendering.HighDefinition
                 passData.output = builder.WriteTexture(pathTracingBuffer);
                 passData.sky = builder.ReadTexture(skyBuffer);
 
+                passData.albedoAOV = renderGraph.ImportTexture(hdCamera.GetCurrentFrameRT((int)HDCameraFrameHistoryType.AlbedoAOV)
+                    ?? hdCamera.AllocHistoryFrameRT((int)HDCameraFrameHistoryType.AlbedoAOV, PathTracingHistoryBufferAllocatorFunction, 1));
+
+                passData.normalAOV = renderGraph.ImportTexture(hdCamera.GetCurrentFrameRT((int)HDCameraFrameHistoryType.NormalAOV)
+                    ?? hdCamera.AllocHistoryFrameRT((int)HDCameraFrameHistoryType.NormalAOV, PathTracingHistoryBufferAllocatorFunction, 1));
+
                 builder.SetRenderFunc(
                     (RenderPathTracingData data, RenderGraphContext ctx) =>
                     {
@@ -361,6 +376,11 @@ namespace UnityEngine.Rendering.HighDefinition
                         // SensorSDK can do its own camera rays generation
                         data.prepareDispatchRays?.Invoke(ctx.cmd);
 #endif
+
+                        // AOVs
+                        ctx.cmd.SetRayTracingTextureParam(data.pathTracingShader, HDShaderIDs._AlbedoAOV, data.albedoAOV);
+                        ctx.cmd.SetRayTracingTextureParam(data.pathTracingShader, HDShaderIDs._NormalAOV, data.normalAOV);
+
                         // Run the computation
                         ctx.cmd.DispatchRays(data.pathTracingShader, "RayGen", (uint)data.width, (uint)data.height, 1);
                     });
@@ -435,7 +455,6 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 #endif
 
-            bool denoise = false;
             if (camData.currentIteration < m_SubFrameManager.subFrameCount)
             {
                 // Keep a sky texture around, that we compute only once per accumulation (except when recording, with potential camera motion blur)
@@ -447,20 +466,26 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 RenderPathTracing(m_RenderGraph, hdCamera, camData, m_FrameTexture, m_SkyTexture);
             }
-            else
-            {
-                if (m_PathTracingSettings.denoise.value && !camData.denoised)
-                {
-                    camData.denoised = true;
-                    m_SubFrameManager.SetCameraData(camID, camData);
-                    denoise = true;
-                }
 
-            }
-
-            RenderAccumulation(m_RenderGraph, hdCamera, m_FrameTexture, colorBuffer, true, denoise);
+            RenderAccumulation(m_RenderGraph, hdCamera, m_FrameTexture, colorBuffer, true);
 
             return colorBuffer;
         }
     }
+
+#if ENABLE_UNITY_DENOISERS
+    /// <summary>
+    /// A <see cref="VolumeParameter"/> that holds a <see cref="FocusDistanceModeParameter"/> value.
+    /// </summary>
+    [Serializable]
+    public sealed class DenoiserParameter : VolumeParameter<DenoiserType>
+    {
+        /// <summary>
+        /// Creates a new <see cref="FocusDistanceModeParameter"/> instance.
+        /// </summary>
+        /// <param name="value">The initial value to store in the parameter.</param>
+        /// <param name="overrideState">The initial override state for the parameter.</param>
+        public DenoiserParameter(DenoiserType value, bool overrideState = false) : base(value, overrideState) { }
+    }
+#endif
 }

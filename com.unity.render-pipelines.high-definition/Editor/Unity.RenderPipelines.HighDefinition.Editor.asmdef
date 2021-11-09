@@ -9,6 +9,7 @@
         "Unity.ugui.Editor",
         "Unity.VisualEffectGraph.Editor",
         "Unity.PackageManagerDocTools.Editor",
+		"Unity.Rendering.Denoiser.Runtime",
         "Unity.RenderPipelines.HighDefinition.Config.Runtime"
     ],
     "includePlatforms": [
@@ -35,6 +36,11 @@
             "name": "com.unity.modules.nvidia",
             "expression": "1.0.0",
             "define": "ENABLE_NVIDIA_MODULE"
+        },
+		{
+            "name": "com.unity.rendering.denoising",
+            "expression": "1.0.0",
+            "define": "ENABLE_UNITY_DENOISERS"
         }
     ]
 }
