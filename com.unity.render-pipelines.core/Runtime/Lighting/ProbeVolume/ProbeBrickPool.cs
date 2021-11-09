@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Profiling;
 using UnityEngine.Rendering;
 using UnityEngine.Profiling;
 
@@ -84,6 +85,8 @@ namespace UnityEngine.Experimental.Rendering
         static DynamicArray<Color> s_L2_1_locData = null;
         static DynamicArray<Color> s_L2_2_locData = null;
         static DynamicArray<Color> s_L2_3_locData = null;
+
+        static ProfilerMarker sPMFillDataLocation = new ProfilerMarker("FillDataLocation");
 
         internal ProbeBrickPool(ProbeVolumeTextureMemoryBudget memoryBudget, ProbeVolumeSHBands shBands)
         {
@@ -358,6 +361,8 @@ namespace UnityEngine.Experimental.Rendering
 
         public static void FillDataLocation(ref DataLocation loc, ProbeVolumeSHBands srcBands, NativeArray<Color> shData, int startIndex, int count, ProbeVolumeSHBands dstBands)
         {
+		    using var pmFillDataLocation = sPMFillDataLocation.Auto();
+
             var probeStride = srcBands == ProbeVolumeSHBands.SphericalHarmonicsL2 ? 7 : 3;
 
             // Coeff constants that cancel out shader probe decoding
