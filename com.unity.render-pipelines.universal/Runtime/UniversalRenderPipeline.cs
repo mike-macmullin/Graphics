@@ -124,7 +124,7 @@ namespace UnityEngine.Rendering.Universal
         {
             get
             {
-                bool isMobile = Application.isMobilePlatform;
+                bool isMobile = UnityEngine.Rendering.GraphicsSettings.HasShaderDefine(BuiltinShaderDefine.SHADER_API_MOBILE);
                 if (isMobile && (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2 || (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3 && Graphics.minOpenGLESVersion <= OpenGLESVersion.OpenGLES30)))
                     return k_MaxVisibleAdditionalLightsMobileShaderLevelLessThan45;
 
