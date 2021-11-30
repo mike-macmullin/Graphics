@@ -252,8 +252,6 @@ void Frag(Varyings packedInput, out float4 outColor : SV_Target0)
     SurfaceData surfaceData;
     BuiltinData builtinData;
     GetSurfaceAndBuiltinData(input, V, posInput, surfaceData, builtinData);
-    builtinData.bakeDiffuseLighting = float3(0.0, 0.0, 0.0);
-    builtinData.backBakeDiffuseLighting = float3(0.0, 0.0, 0.0);
     BSDFData bsdfData = ConvertSurfaceDataToBSDFData(input.positionSS.xy, surfaceData);
 
     PreLightData preLightData = GetPreLightData(V, posInput, bsdfData);

@@ -930,6 +930,9 @@ Shader "HDRP/Lit"
 
             #pragma multi_compile VARIANT_DIR_ENV VARIANT_DIR_PUNCTUAL_ENV VARIANT_DIR_PUNCTUAL_AREA_ENV
 
+            #pragma multi_compile _ LIGHTMAP_ON
+            #pragma multi_compile _ DYNAMICLIGHTMAP_ON
+
             #define HAS_LIGHTLOOP
 
             #define SHADERPASS SHADERPASS_VBUFFER_LIGHTING
