@@ -306,6 +306,7 @@ namespace UnityEngine.Rendering.Universal
             m_XRTargetHandleAlias?.Release();
             m_DepthTexture?.Release();
             m_NormalsTexture?.Release();
+            m_DecalLayersTexture?.Release();
             m_OpaqueColor?.Release();
             m_MotionVectorColor?.Release();
             m_MotionVectorDepth?.Release();
@@ -556,10 +557,6 @@ namespace UnityEngine.Rendering.Universal
                 if (intermediateRenderTexture)
                     CreateCameraRenderTarget(context, ref cameraTargetDescriptor, useDepthPriming);
 
-                if (renderingLayerProvidesRenderObjectPass)
-                {
-                    CreateDecalLayerRenderTarget(context, ref cameraTargetDescriptor, useDepthPriming);
-                }
                 m_ActiveCameraColorAttachment = createColorTexture ? m_ColorBufferSystem.PeekBackBuffer() : m_XRTargetHandleAlias;
                 m_ActiveCameraDepthAttachment = createDepthTexture ? m_CameraDepthAttachment : m_XRTargetHandleAlias;
             }
@@ -648,6 +645,37 @@ namespace UnityEngine.Rendering.Universal
 
                 CommandBuffer cmd = CommandBufferPool.Get();
                 cmd.SetGlobalTexture(m_DepthTexture.name, m_DepthTexture.nameID);
+                context.ExecuteCommandBuffer(cmd);
+                CommandBufferPool.Release(cmd);
+            }
+
+            if (renderPassInputs.requiresRenderingLayer)
+            {
+                ref var renderingLayersTexture = ref m_DecalLayersTexture;
+                string renderingLayersTextureName = "_CameraDecalLayersTexture";
+
+                if (this.actualRenderingMode == RenderingMode.Deferred)
+                {
+                    renderingLayersTexture = ref m_DeferredLights.GbufferAttachments[(int)m_DeferredLights.GBufferRenderingLayers];
+                    renderingLayersTextureName = renderingLayersTexture.name;
+                }
+
+                var renderingLayersDescriptor = cameraTargetDescriptor;
+                renderingLayersDescriptor.depthBufferBits = 0;
+                // Never have MSAA on this depth texture. When doing MSAA depth priming this is the texture that is resolved to and used for post-processing.
+                renderingLayersDescriptor.msaaSamples = 1;// Depth-Only pass don't use MSAA
+                // Find compatible render-target format for storing normals.
+                // Shader code outputs normals in signed format to be compatible with deferred gbuffer layout.
+                // Deferred gbuffer format is signed so that normals can be blended for terrain geometry.
+                if (this.actualRenderingMode == RenderingMode.Deferred)
+                    renderingLayersDescriptor.graphicsFormat = m_DeferredLights.GetGBufferFormat(m_DeferredLights.GBufferRenderingLayers); // the one used by the gbuffer.
+                else
+                    renderingLayersDescriptor.graphicsFormat = GraphicsFormat.R16_UNorm;
+
+                RenderingUtils.ReAllocateIfNeeded(ref renderingLayersTexture, renderingLayersDescriptor, FilterMode.Point, TextureWrapMode.Clamp, name: renderingLayersTextureName);
+
+                CommandBuffer cmd = CommandBufferPool.Get();
+                cmd.SetGlobalTexture(renderingLayersTexture.name, renderingLayersTexture.nameID);
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
             }
@@ -815,19 +843,16 @@ namespace UnityEngine.Rendering.Universal
 
                 if (renderingLayerProvidesRenderObjectPass)
                 {
-                    RenderTargetIdentifier[] rts = new RenderTargetIdentifier[]
+                    RTHandle[] rts = new RTHandle[]
                     {
-                        m_ActiveCameraColorAttachment.Identifier(),
-                        m_DecalLayersTexture.Identifier(),
+                        m_ActiveCameraColorAttachment,
+                        m_DecalLayersTexture,
                     };
 
-                    m_RenderOpaqueForwardPass.Setup(rts, m_ActiveCameraDepthAttachment.Identifier());
+                    m_RenderOpaqueForwardPass.Setup(rts, m_ActiveCameraDepthAttachment);
                 }
                 else
                     m_RenderOpaqueForwardPass.Setup();
-
-
-
 
                 EnqueuePass(m_RenderOpaqueForwardPass);
             }
@@ -1197,10 +1222,10 @@ namespace UnityEngine.Rendering.Universal
             using (new ProfilingScope(null, Profiling.createCameraRenderTarget))
             {
                 var desc = descriptor;
-                desc.graphicsFormat = Experimental.Rendering.GraphicsFormat.R16_UNorm;
+                desc.graphicsFormat = GraphicsFormat.R16_UNorm;
                 desc.depthBufferBits = 0;
                 //desc.msaaSamples = primedDepth ? m_RendererMSAASamples : 1;
-                cmd.GetTemporaryRT(m_DecalLayersTexture.id, desc, FilterMode.Point);
+                RenderingUtils.ReAllocateIfNeeded(ref m_DecalLayersTexture, desc, FilterMode.Point);
             }
 
             context.ExecuteCommandBuffer(cmd);

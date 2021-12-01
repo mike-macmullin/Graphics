@@ -21,8 +21,8 @@ namespace UnityEngine.Rendering.Universal.Internal
 
         bool m_UseDepthPriming;
 
-        RenderTargetIdentifier[] m_ColorTargetIndentifiers;
-        RenderTargetIdentifier m_DepthTargetIndentifiers;
+        RTHandle[] m_ColorTargetIndentifiers;
+        RTHandle m_DepthTargetIndentifiers;
 
         static readonly int s_DrawObjectPassDataPropID = Shader.PropertyToID("_DrawObjectPassData");
 
@@ -50,10 +50,10 @@ namespace UnityEngine.Rendering.Universal.Internal
         public void Setup()
         {
             m_ColorTargetIndentifiers = null;
-            m_DepthTargetIndentifiers = new RenderTargetIdentifier();
+            m_DepthTargetIndentifiers = null;
         }
 
-        public void Setup(RenderTargetIdentifier[] colorAttachments, RenderTargetIdentifier depthAttachment)
+        public void Setup(RTHandle[] colorAttachments, RTHandle depthAttachment)
         {
             m_ColorTargetIndentifiers = colorAttachments;
             m_DepthTargetIndentifiers = depthAttachment;

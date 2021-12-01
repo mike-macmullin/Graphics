@@ -59,10 +59,10 @@ namespace UnityEngine.Rendering.Universal
 
                 if (m_DecalLayers)
                 {
-                    var deferredInputAttachments = new RenderTargetIdentifier[]
+                    var deferredInputAttachments = new RTHandle[]
                     {
-                        m_DeferredLights.DepthCopyTextureIdentifier,
-                        m_DeferredLights.GbufferAttachmentIdentifiers[m_DeferredLights.GBufferRenderingLayers],
+                        m_DeferredLights.DepthCopyTexture,
+                        m_DeferredLights.GbufferAttachments[m_DeferredLights.GBufferRenderingLayers],
                     };
 
                     var deferredInputIsTransient = new bool[]
@@ -74,9 +74,9 @@ namespace UnityEngine.Rendering.Universal
                 }
                 else
                 {
-                    var deferredInputAttachments = new RenderTargetIdentifier[]
+                    var deferredInputAttachments = new RTHandle[]
                     {
-                        m_DeferredLights.DepthCopyTextureIdentifier,
+                        m_DeferredLights.DepthCopyTexture,
                     };
 
                     var deferredInputIsTransient = new bool[]
@@ -99,7 +99,7 @@ namespace UnityEngine.Rendering.Universal
                     };
             }
 
-            ConfigureTarget(m_GbufferAttachments, m_DeferredLights.DepthAttachmentIdentifier);
+            ConfigureTarget(m_GbufferAttachments, m_DeferredLights.DepthAttachmentHandle);
         }
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)

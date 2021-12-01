@@ -56,10 +56,10 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// </summary>
         public void Setup(RTHandle depthHandle, RTHandle normalHandle, RTHandle decalLayerHandle)
         {
-            this.renderingLayerslHandle = decalLayerHandle;
+            this.renderingLayersHandle = decalLayerHandle;
             this.enableRenderingLayers = true;
 
-            Setup(baseDescriptor, depthHandle, normalHandle);
+            Setup(depthHandle, normalHandle);
         }
 
 
@@ -69,14 +69,14 @@ namespace UnityEngine.Rendering.Universal.Internal
             RTHandle[] colorHandles;
             if (this.enableRenderingLayers)
             {
-                k_ColorAttachment1[0] = normalHandle;
-                k_ColorAttachment1[1] = decalLayerHandle;
-                colorHandles = k_ColorAttachment1;
+                k_ColorAttachment2[0] = normalHandle;
+                k_ColorAttachment2[1] = renderingLayersHandle;
+                colorHandles = k_ColorAttachment2;
             }
             else
             {
-                k_ColorAttachment0[0] = normalHandle;
-                colorHandles = k_ColorAttachment0;
+                k_ColorAttachment1[0] = normalHandle;
+                colorHandles = k_ColorAttachment1;
             }
 
 
@@ -115,7 +115,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 
                 // todo check if add normal here too
                 if (this.enableRenderingLayers)
-                    cmd.SetGlobalTexture("_CameraDecalLayersTexture", renderingLayerslHandle.id);
+                    cmd.SetGlobalTexture("_CameraDecalLayersTexture", renderingLayersHandle);
 
             }
             context.ExecuteCommandBuffer(cmd);
