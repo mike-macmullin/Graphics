@@ -18,15 +18,15 @@ namespace UnityEditor.Rendering
             var oldWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = Styles.labelWidth;
 
+            EditorGUILayout.Space();
             using (new EditorGUI.IndentLevelScope())
             {
                 EditorGUILayout.PropertyField(serialized.shaderVariantLogLevel, Styles.shaderVariantLogLevelLabel);
                 EditorGUILayout.PropertyField(serialized.exportShaderVariants, Styles.exportShaderVariantsLabel);
                 additionalShaderStrippingSettings?.Draw(serialized, owner);
             }
-
-            EditorGUIUtility.labelWidth = oldWidth;
             EditorGUILayout.Space();
+            EditorGUIUtility.labelWidth = oldWidth;
         }
     }
 }

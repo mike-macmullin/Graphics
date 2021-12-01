@@ -61,8 +61,6 @@ namespace UnityEditor.Rendering.Universal
         #region Misc Settings
 
         static readonly CED.IDrawer MiscSection = CED.Group(
-            CED.Group((serialized, owner) => CoreEditorUtils.DrawSectionHeader(Styles.miscSettingsLabel)),
-            CED.Group((serialized, owner) => EditorGUILayout.Space()),
             CED.Group((serialized, owner) => RenderPipelineGlobalSettingsUI.DrawShaderStrippingSettings(serialized, owner, CoreEditorDrawer<ISerializedRenderPipelineGlobalSettings>.Group((s, e) =>
             {
                 if (s is SerializedUniversalRenderPipelineGlobalSettings universalRenderPipelineGlobalSettings)
