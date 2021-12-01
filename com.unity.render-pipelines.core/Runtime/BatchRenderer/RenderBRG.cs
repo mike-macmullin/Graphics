@@ -8,6 +8,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.Burst;
+using Unity.Burst.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
@@ -232,6 +233,8 @@ namespace UnityEngine.Rendering
             public BatchID batchID;
             public int viewID;
             public int sliceID;
+            public int maxDrawCounts;
+            public int maxVisibleInstances;
 
             [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<ulong> rendererVisibility;
 
@@ -242,6 +245,9 @@ namespace UnityEngine.Rendering
 
             public NativeArray<BatchCullingOutputDrawCommands> drawCommands;
 
+#if DEBUG
+            [IgnoreWarning(1370)] //Ignore throwing exception warning.
+#endif
             public void Execute()
             {
                 var draws = drawCommands[0];
@@ -264,10 +270,11 @@ namespace UnityEngine.Rendering
 #endif
                 for (int activeRange = 0; activeRange < drawRanges.Length; ++activeRange)
                 {
-                    var batchCount = drawRanges[activeRange].drawCount;
+                    var drawRangeInfo = drawRanges[activeRange];
+                    var batchCount = drawRangeInfo.drawCount;
                     for (int activeBatch = 0; activeBatch < batchCount; ++activeBatch)
                     {
-                        var remappedDrawIndex = drawIndices[activeBatch];
+                        var remappedDrawIndex = drawIndices[drawRangeInfo.drawOffset + activeBatch];
                         var instanceCount = drawBatches[remappedDrawIndex].instanceCount;
                         var instanceOffset = drawBatches[remappedDrawIndex].instanceOffset;
 
@@ -278,6 +285,10 @@ namespace UnityEngine.Rendering
 
                             if (visibleMask != 0)
                             {
+#if DEBUG
+                                if (outIndex >= maxVisibleInstances)
+                                    throw new Exception("Exceeding visible instance count");
+#endif
                                 draws.visibleInstances[outIndex] = rendererIndex;
                                 outIndex++;
                             }
@@ -287,6 +298,11 @@ namespace UnityEngine.Rendering
                         var visibleCount = outIndex - batchStartIndex;
                         if (visibleCount > 0)
                         {
+#if DEBUG
+                            if (outBatch >= maxDrawCounts)
+                                throw new Exception("Exceeding draw count");
+#endif
+
                             draws.drawCommands[outBatch] = new BatchDrawCommand
                             {
                                 visibleOffset = (uint)batchStartIndex,
@@ -378,7 +394,7 @@ namespace UnityEngine.Rendering
 
                 var bins = stackalloc uint[64];
                 for (int i = 0; i < 64; ++i)
-                { 
+                {
                     bins[i] = 0;
                 }
 
@@ -387,16 +403,17 @@ namespace UnityEngine.Rendering
 #endif
                 for (int activeRange = 0; activeRange < drawRanges.Length; ++activeRange)
                 {
-                    var batchCount = drawRanges[activeRange].drawCount;
+                    var drawRangeInfo = drawRanges[activeRange];
+                    var batchCount = drawRangeInfo.drawCount;
                     for (int activeBatch = 0; activeBatch < batchCount; ++activeBatch)
                     {
-                        var remappedDrawIndex = drawIndices[activeBatch];
+                        var remappedDrawIndex = drawIndices[drawRangeInfo.drawOffset + activeBatch];
                         var instanceCount = drawBatches[remappedDrawIndex].instanceCount;
                         var instanceOffset = drawBatches[remappedDrawIndex].instanceOffset;
 
                         // Count the number of instances with each unique visible mask (6 bits = 64 bins) to allocate contiguous storage for the DrawCommands
                         UInt64 usedBins = 0;
-                        int visibleTotal = 0; 
+                        int visibleTotal = 0;
                         for (int i = 0; i < instanceCount; ++i)
                         {
                             var rendererIndex = instanceIndices[instanceOffset + i];
@@ -597,7 +614,7 @@ namespace UnityEngine.Rendering
                         {
                             receiverPlanes[receiverPlaneCount++] = plane;
 
-#if DEBUG_LOG_RECEIVER_PLANES 
+#if DEBUG_LOG_RECEIVER_PLANES
                             Debug.Log(
                                 "[OnPerformCulling] back facing receiver plane (direction)=" + i +
                                 " normal(x=" + plane.normal.x + " y=" + plane.normal.y + " z=" + plane.normal.z + ")" +
@@ -636,6 +653,7 @@ namespace UnityEngine.Rendering
 
             BatchCullingOutputDrawCommands drawCommands = new BatchCullingOutputDrawCommands();
             drawCommands.drawRanges = Malloc<BatchDrawRange>(m_drawRanges.Length);
+            int maxDrawCounts = m_drawBatches.Length * 10 * splitCounts.Length;
             drawCommands.drawCommands = Malloc<BatchDrawCommand>(m_drawBatches.Length * 10 * // TODO: FIXME! (add sort)
                 splitCounts.Length); // TODO: Multiplying the DrawCommand count by splitCount is NOT an conservative upper bound. But in practice is enough...
             drawCommands.visibleInstances = Malloc<int>(m_instanceIndices.Length);
@@ -670,10 +688,12 @@ namespace UnityEngine.Rendering
             if (cc.cullingSplits.Length == 1)
             {
                 var drawOutputJob = new DrawCommandOutputSingleSplitJob
-                { 
+                {
                     viewID = cc.viewID.GetInstanceID(),
                     sliceID = cc.viewID.GetInstanceID(),
                     batchID = m_batchID,
+                    maxDrawCounts = maxDrawCounts,
+                    maxVisibleInstances = m_instanceIndices.Length,
                     rendererVisibility = rendererVisibility,
                     instanceIndices = m_instanceIndices,
                     drawBatches = m_drawBatches,
@@ -684,7 +704,7 @@ namespace UnityEngine.Rendering
                 jobHandleOutput = drawOutputJob.Schedule(jobHandleCulling);
             }
             else
-            { 
+            {
                 var drawOutputJob = new DrawCommandOutputMultiSplitJob
                 {
                     viewID = cc.viewID.GetInstanceID(),
@@ -783,6 +803,27 @@ namespace UnityEngine.Rendering
                 outMesh = m_GlobalGeoPool.globalMesh;
 
             }
+        }
+
+        private void SanityCheckDrawInstanceCounts()
+        {
+#if DEBUG
+            int maxVisibleInstances = 0;
+            for (int rangeIdx = 0; rangeIdx < m_drawRanges.Length; ++rangeIdx)
+            {
+                int batchCount = m_drawRanges[rangeIdx].drawCount;
+                for (int batchIdx = 0; batchIdx < batchCount; ++batchIdx)
+                {
+                    maxVisibleInstances += m_drawBatches[m_drawIndices[m_drawRanges[rangeIdx].drawOffset+ batchIdx]].instanceCount;
+                }
+            }
+            Assert.IsTrue(maxVisibleInstances == m_instances.Length);
+
+            int totalInstances = 0;
+            for (int drawBatchIdx = 0; drawBatchIdx < m_drawBatches.Length; ++drawBatchIdx)
+                totalInstances += m_drawBatches[drawBatchIdx].instanceCount;
+            Assert.IsTrue(totalInstances == m_instances.Length);
+#endif
         }
 
         // Start is called before the first frame update
@@ -1075,6 +1116,8 @@ namespace UnityEngine.Rendering
                 }
             }
 
+            SanityCheckDrawInstanceCounts();
+
             m_internalDrawIndex.Dispose();
 
             // Bounds ("infinite")
@@ -1296,7 +1339,7 @@ namespace UnityEngine.Rendering
         private void Update()
         {
             if (EnableTransformUpdate)
-            { 
+            {
                 m_gpuCmdBuffer.Clear();
 
                 foreach (var sceneBrg in m_Scenes)
