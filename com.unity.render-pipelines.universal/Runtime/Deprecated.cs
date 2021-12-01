@@ -96,7 +96,7 @@ namespace UnityEngine.Rendering.Universal
         public ShaderVariantLogLevel shaderVariantLogLevel
         {
             get { return (ShaderVariantLogLevel)UniversalRenderPipelineGlobalSettings.instance.shaderVariantLogLevel; }
-            set { UniversalRenderPipelineGlobalSettings.instance.shaderVariantLogLevel = (UnityEngine.Rendering.ShaderVariantLogLevel) value; }
+            set { UniversalRenderPipelineGlobalSettings.instance.shaderVariantLogLevel = (UnityEngine.Rendering.ShaderVariantLogLevel)value; }
         }
 #pragma warning restore 618 // Obsolete warning
 
