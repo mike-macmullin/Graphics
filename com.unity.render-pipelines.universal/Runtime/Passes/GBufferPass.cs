@@ -74,6 +74,10 @@ namespace UnityEngine.Rendering.Universal.Internal
                     if (i == m_DeferredLights.GBufferNormalSmoothnessIndex && m_DeferredLights.HasNormalPrepass)
                         continue;
 
+                    // todo
+                    if (i == m_DeferredLights.GBufferRenderingLayers && m_DeferredLights.HasRenderingLayerPrepass)
+                        continue;
+
                     // No need to setup temporaryRTs if we are using input attachments as they will be Memoryless
                     if (m_DeferredLights.UseRenderPass && i != m_DeferredLights.GBufferShadowMask && i != m_DeferredLights.GBufferRenderingLayers && (i != m_DeferredLights.GbufferDepthIndex && !m_DeferredLights.HasDepthPrepass))
                         continue;
@@ -133,6 +137,8 @@ namespace UnityEngine.Rendering.Universal.Internal
                 // Input attachments will only be used when this is not needed so safe to skip in that case
                 if (!m_DeferredLights.UseRenderPass)
                     gbufferCommands.SetGlobalTexture(s_CameraNormalsTextureID, m_DeferredLights.GbufferAttachmentIdentifiers[m_DeferredLights.GBufferNormalSmoothnessIndex]);
+                if (!m_DeferredLights.UseRenderPass && m_DeferredLights.UseRenderingLayers)
+                    gbufferCommands.SetGlobalTexture("_CameraDecalLayersTexture", m_DeferredLights.GbufferAttachmentIdentifiers[m_DeferredLights.GBufferRenderingLayers]);
             }
 
             context.ExecuteCommandBuffer(gbufferCommands);
@@ -149,6 +155,10 @@ namespace UnityEngine.Rendering.Universal.Internal
                     continue;
 
                 if (i == m_DeferredLights.GBufferNormalSmoothnessIndex && m_DeferredLights.HasNormalPrepass)
+                    continue;
+
+                // todo
+                if (i == m_DeferredLights.GBufferRenderingLayers && m_DeferredLights.HasNormalPrepass && m_DeferredLights.UseRenderingLayers)
                     continue;
 
                 cmd.ReleaseTemporaryRT(gbufferAttachments[i].id);

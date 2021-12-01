@@ -28,6 +28,8 @@ namespace UnityEngine.Rendering.Universal
         private RenderTargetHandle m_CameraDepthTexture;
         private RenderTargetHandle m_CameraDepthAttachment;
 
+        private bool m_DecalLayers;
+
         internal DeferredLights deferredLights { get; set; }
         private bool isDeferred => deferredLights != null;
         internal RenderTargetIdentifier[] dBufferColorIndentifiers { get; private set; }
@@ -36,16 +38,21 @@ namespace UnityEngine.Rendering.Universal
         internal RenderTargetHandle cameraDepthTexture => m_CameraDepthTexture;
         internal RenderTargetHandle cameraDepthAttachment => m_CameraDepthAttachment;
 
-        public DBufferRenderPass(Material dBufferClear, DBufferSettings settings, DecalDrawDBufferSystem drawSystem)
+        public DBufferRenderPass(Material dBufferClear, DBufferSettings settings, DecalDrawDBufferSystem drawSystem, bool decalLayers)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingPrePasses + 1;
-            ConfigureInput(ScriptableRenderPassInput.Normal); // Require depth
+
+            var scriptableRenderPassInput = ScriptableRenderPassInput.Normal;
+            if (decalLayers)
+                scriptableRenderPassInput |= ScriptableRenderPassInput.RenderingLayer;
+            ConfigureInput(scriptableRenderPassInput);
 
             m_DrawSystem = drawSystem;
             m_Settings = settings;
             m_DBufferClear = dBufferClear;
             m_ProfilingSampler = new ProfilingSampler("DBuffer Render");
             m_FilteringSettings = new FilteringSettings(RenderQueueRange.opaque, -1);
+            m_DecalLayers = decalLayers;
 
             m_ShaderTagIdList = new List<ShaderTagId>();
             m_ShaderTagIdList.Add(new ShaderTagId(DecalShaderPassNames.DBufferMesh));
@@ -124,14 +131,20 @@ namespace UnityEngine.Rendering.Universal
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
 
+                // todo this should be set by depth normal prepass
                 if (isDeferred)
                 {
                     cmd.SetGlobalTexture("_CameraNormalsTexture", deferredLights.GbufferAttachmentIdentifiers[deferredLights.GBufferNormalSmoothnessIndex]);
+
+                    //if (m_DecalLayers)
+                    //    cmd.SetGlobalTexture("_CameraDecalLayersTexture", deferredLights.GbufferAttachmentIdentifiers[deferredLights.GBufferRenderingLayers]);
                 }
 
                 CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DBufferMRT1, m_Settings.surfaceData == DecalSurfaceData.Albedo);
                 CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DBufferMRT2, m_Settings.surfaceData == DecalSurfaceData.AlbedoNormal);
                 CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DBufferMRT3, m_Settings.surfaceData == DecalSurfaceData.AlbedoNormalMAOS);
+
+                CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DecalLayers, m_DecalLayers);
 
                 // TODO: This should be replace with mrt clear once we support it
                 // Clear render targets

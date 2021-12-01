@@ -41,6 +41,7 @@ namespace UnityEditor.Rendering.Universal
         {
             Inspector = CED.Group(
                 LightLayerNamesSection,
+                DecalLayerNamesSection,
                 MiscSection
             );
         }
@@ -192,6 +193,37 @@ namespace UnityEditor.Rendering.Universal
                     EditorGUILayout.DelayedTextField(serialized.lightLayerName5, Styles.lightLayerName5);
                     EditorGUILayout.DelayedTextField(serialized.lightLayerName6, Styles.lightLayerName6);
                     EditorGUILayout.DelayedTextField(serialized.lightLayerName7, Styles.lightLayerName7);
+                    if (changed.changed)
+                    {
+                        serialized.serializedObject?.ApplyModifiedProperties();
+                        (serialized.serializedObject.targetObject as UniversalRenderPipelineGlobalSettings).UpdateRenderingLayerNames();
+                    }
+                }
+            }
+
+            EditorGUIUtility.labelWidth = oldWidth;
+        }
+
+        static readonly CED.IDrawer DecalLayerNamesSection = CED.Group(
+            CED.Group((serialized, owner) => CoreEditorUtils.DrawSectionHeader(Styles.lightLayersLabel, contextAction: pos => OnContextClickLightLayerNames(pos, serialized))),
+            CED.Group((serialized, owner) => EditorGUILayout.Space()),
+            CED.Group(DrawDecalLayerNames),
+            CED.Group((serialized, owner) => EditorGUILayout.Space())
+        );
+
+        static void DrawDecalLayerNames(SerializedUniversalRenderPipelineGlobalSettings serialized, Editor owner)
+        {
+            var oldWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = Styles.labelWidth;
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                using (var changed = new EditorGUI.ChangeCheckScope())
+                {
+                    EditorGUILayout.DelayedTextField(serialized.decalLayerName0, Styles.decalLayerName0);
+                    EditorGUILayout.DelayedTextField(serialized.decalLayerName1, Styles.decalLayerName1);
+                    EditorGUILayout.DelayedTextField(serialized.decalLayerName2, Styles.decalLayerName2);
+                    EditorGUILayout.DelayedTextField(serialized.decalLayerName3, Styles.decalLayerName3);
                     if (changed.changed)
                     {
                         serialized.serializedObject?.ApplyModifiedProperties();
