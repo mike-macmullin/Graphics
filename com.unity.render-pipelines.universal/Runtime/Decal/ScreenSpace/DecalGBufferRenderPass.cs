@@ -17,11 +17,8 @@ namespace UnityEngine.Rendering.Universal
         private DecalDrawGBufferSystem m_DrawSystem;
         private DecalScreenSpaceSettings m_Settings;
         private DeferredLights m_DeferredLights;
-        private RenderTargetIdentifier[] m_GbufferAttachments;
+        private RTHandle[] m_GbufferAttachments;
         private bool m_DecalLayers;
-
-        //private static readonly RenderTargetIdentifier[] k_ColorAttachment1 = new RenderTargetIdentifier[1];
-        //private static readonly RenderTargetIdentifier[] k_ColorAttachment2 = new RenderTargetIdentifier[2];
 
         public DecalGBufferRenderPass(DecalScreenSpaceSettings settings, DecalDrawGBufferSystem drawSystem, bool decalLayers)
         {
@@ -52,10 +49,10 @@ namespace UnityEngine.Rendering.Universal
             if (m_DeferredLights.UseRenderPass)
             {
                 if (m_GbufferAttachments == null)
-                    m_GbufferAttachments = new RenderTargetIdentifier[]
+                    m_GbufferAttachments = new RTHandle[]
                     {
-                        m_DeferredLights.GbufferAttachmentIdentifiers[0], m_DeferredLights.GbufferAttachmentIdentifiers[1],
-                        m_DeferredLights.GbufferAttachmentIdentifiers[2], m_DeferredLights.GbufferAttachmentIdentifiers[3]
+                        m_DeferredLights.GbufferAttachments[0], m_DeferredLights.GbufferAttachments[1],
+                        m_DeferredLights.GbufferAttachments[2], m_DeferredLights.GbufferAttachments[3]
                     };
 
                 //m_GbufferAttachments = m_DeferredLights.GbufferAttachmentIdentifiers;
@@ -95,51 +92,15 @@ namespace UnityEngine.Rendering.Universal
                 //m_GbufferAttachments = m_DeferredLights.GbufferAttachmentIdentifiers;
 
                 if (m_GbufferAttachments == null)
-                    m_GbufferAttachments = new RenderTargetIdentifier[]
+                    m_GbufferAttachments = new RTHandle[]
                     {
-                        m_DeferredLights.GbufferAttachmentIdentifiers[0], m_DeferredLights.GbufferAttachmentIdentifiers[1],
-                        m_DeferredLights.GbufferAttachmentIdentifiers[2], m_DeferredLights.GbufferAttachmentIdentifiers[3]
+                        m_DeferredLights.GbufferAttachments[0], m_DeferredLights.GbufferAttachments[1],
+                        m_DeferredLights.GbufferAttachments[2], m_DeferredLights.GbufferAttachments[3]
                     };
             }
 
             ConfigureTarget(m_GbufferAttachments, m_DeferredLights.DepthAttachmentIdentifier);
         }
-
-        /*public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
-        {
-            if (m_DeferredLights.UseRenderPass)
-            {
-                if (m_DecalLayers)
-                {
-                    var deferredInputAttachments = new RenderTargetIdentifier[]
-                    {
-                        m_DeferredLights.DepthCopyTextureIdentifier,
-                        m_DeferredLights.GbufferAttachmentIdentifiers[m_DeferredLights.GBufferRenderingLayers],
-                    };
-
-                    var deferredInputIsTransient = new bool[]
-                    {
-                        true, true,
-                    };
-
-                    ConfigureInputAttachments(deferredInputAttachments, deferredInputIsTransient);
-                }
-                else
-                {
-                    var deferredInputAttachments = new RenderTargetIdentifier[]
-                    {
-                        m_DeferredLights.DepthCopyTextureIdentifier,
-                    };
-
-                    var deferredInputIsTransient = new bool[]
-                    {
-                        true,
-                    };
-
-                    ConfigureInputAttachments(deferredInputAttachments, deferredInputIsTransient);
-                }
-            }
-        }*/
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
@@ -182,7 +143,6 @@ namespace UnityEngine.Rendering.Universal
             CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DecalNormalBlendMedium, false);
             CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DecalNormalBlendHigh, false);
             CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.DecalLayers, false);
-
         }
     }
 }
