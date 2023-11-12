@@ -125,11 +125,15 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule
         ///<summary>Render Graph pool used for temporary data.</summary>
         public RenderGraphObjectPool renderGraphPool { get => wrappedContext.renderGraphPool; }
 
+        static internal ComputeCommandBuffer computecmd = new ComputeCommandBuffer(null, null, false);
+
         /// <inheritdoc />
         public void FromInternalContext(InternalRenderGraphContext context)
         {
             wrappedContext = context;
-            cmd = new ComputeCommandBuffer(wrappedContext.cmd, wrappedContext.executingPass, false);
+            computecmd.m_WrappedCommandBuffer = wrappedContext.cmd;
+            computecmd.m_ExecutingPass = context.executingPass;
+            cmd = computecmd;
         }
     }
 
@@ -410,6 +414,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule
 
             public bool enableAsyncCompute;
             public bool allowPassCulling { get { return pass.allowPassCulling; } }
+            public bool enableFoveatedRasterization { get { return pass.enableFoveatedRasterization; } }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             // This members are only here to ease debugging.
@@ -850,11 +855,22 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule
         /// <summary>
         /// Creates a new UIOverlay Renderer List Render Graph resource.
         /// </summary>
-        /// <param name="camera">The camera that is used for rendering the UIOverlay.</param>
+        /// <param name="camera">The camera that is used for rendering the full UIOverlay.</param>
         /// <returns>A new RendererListHandle.</returns>
         public RendererListHandle CreateUIOverlayRendererList(in Camera camera)
         {
-            return m_Resources.CreateUIOverlayRendererList(m_RenderGraphContext.renderContext, camera);
+            return m_Resources.CreateUIOverlayRendererList(m_RenderGraphContext.renderContext, camera, UISubset.All);
+        }
+
+        /// <summary>
+        /// Creates a new UIOverlay Renderer List Render Graph resource.
+        /// </summary>
+        /// <param name="camera">The camera that is used for rendering some subset of the UIOverlay.</param>
+        /// <param name="uiSubset">Enum flag that specifies which subset to render.</param>
+        /// <returns>A new RendererListHandle.</returns>
+        public RendererListHandle CreateUIOverlayRendererList(in Camera camera, in UISubset uiSubset)
+        {
+            return m_Resources.CreateUIOverlayRendererList(m_RenderGraphContext.renderContext, camera, uiSubset);
         }
 
         /// <summary>
@@ -2185,6 +2201,9 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule
                 }
             }
 
+            if (passInfo.enableFoveatedRasterization)
+                rgContext.cmd.SetFoveatedRenderingMode(FoveatedRenderingMode.Enabled);
+
             PreRenderPassSetRenderTargets(passInfo, rgContext);
 
             if (passInfo.enableAsyncCompute)
@@ -2229,6 +2248,9 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule
                 CommandBufferPool.Release(rgContext.cmd);
                 rgContext.cmd = m_PreviousCommandBuffer; // Restore the main command buffer.
             }
+
+            if (passInfo.enableFoveatedRasterization)
+                rgContext.cmd.SetFoveatedRenderingMode(FoveatedRenderingMode.Disabled);
 
             m_RenderGraphPool.ReleaseAllTempAlloc();
 

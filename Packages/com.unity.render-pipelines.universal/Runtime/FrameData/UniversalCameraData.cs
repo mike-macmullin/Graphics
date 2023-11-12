@@ -139,6 +139,21 @@ namespace UnityEngine.Rendering.Universal
         /// </summary>
         public Camera camera;
 
+
+        // NOTE: This is internal instead of private to allow ref return in the old CameraData compatibility property.
+        // We can make this private when it is removed.
+        //
+        // A (non-owning) reference of full writable camera history for internal and injected render passes.
+        // Only passes/code executing inside the pipeline should have access.
+        // Use the "historyManager" property below to access.
+        internal UniversalCameraHistory m_HistoryManager;
+
+        /// <summary>
+        /// The camera history texture manager. Used to access camera history from a ScriptableRenderPass.
+        /// </summary>
+        /// <seealso cref="ScriptableRenderPass"/>
+        public UniversalCameraHistory historyManager { get => m_HistoryManager; set => m_HistoryManager = value; }
+
         /// <summary>
         /// The camera render type used for camera stacking.
         /// <see cref="CameraRenderType"/>
@@ -338,13 +353,13 @@ namespace UnityEngine.Rendering.Universal
         public bool IsHandleYFlipped(RTHandle handle)
         {
             if (!SystemInfo.graphicsUVStartsAtTop)
-                return false;
+                return true;
 
             if (cameraType == CameraType.SceneView || cameraType == CameraType.Preview)
                 return true;
 
             var handleID = new RenderTargetIdentifier(handle.nameID, 0, CubemapFace.Unknown, 0);
-            bool isBackbuffer = handleID == BuiltinRenderTextureType.CameraTarget;
+            bool isBackbuffer = handleID == BuiltinRenderTextureType.CameraTarget || handleID == BuiltinRenderTextureType.Depth;
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (xr.enabled)
                 isBackbuffer |= handleID == new RenderTargetIdentifier(xr.renderTarget, 0, CubemapFace.Unknown, 0);
@@ -386,7 +401,7 @@ namespace UnityEngine.Rendering.Universal
         public bool IsRenderTargetProjectionMatrixFlipped(RTHandle color, RTHandle depth = null)
         {
             if (!SystemInfo.graphicsUVStartsAtTop)
-                return false;
+                return true;
 
             return targetTexture != null || IsHandleYFlipped(color ?? depth);
         }
@@ -396,7 +411,7 @@ namespace UnityEngine.Rendering.Universal
             UniversalAdditionalCameraData additionalCameraData;
             camera.TryGetComponent(out additionalCameraData);
 
-            return (antialiasing == AntialiasingMode.TemporalAntiAliasing)                                                            // Enabled
+            return (antialiasing == AntialiasingMode.TemporalAntiAliasing)                                                         // Enabled
                 && (taaPersistentData != null)                                                                                     // Initialized
                 && (cameraTargetDescriptor.msaaSamples == 1)                                                                       // No MSAA
                 && !(additionalCameraData?.renderType == CameraRenderType.Overlay || additionalCameraData?.cameraStack.Count > 0)  // No Camera stack

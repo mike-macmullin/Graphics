@@ -31,17 +31,18 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// Creates a new <c>CopyDepthPass</c> instance.
         /// </summary>
         /// <param name="evt">The <c>RenderPassEvent</c> to use.</param>
-        /// <param name="copyDepthMaterial">The <c>Material</c> to use for copying the depth.</param>
+        /// <param name="copyDepthShader">The <c>Shader</c> to use for copying the depth.</param>
         /// <param name="shouldClear">Controls whether it should do a clear before copying the depth.</param>
         /// <param name="copyToDepth">Controls whether it should do a copy to a depth format target.</param>
         /// <param name="copyResolvedDepth">Set to true if the source depth is MSAA resolved.</param>
+        /// <param name="customPassName">An optional custom profiling name to disambiguate multiple copy passes.</param>
         /// <seealso cref="RenderPassEvent"/>
-        public CopyDepthPass(RenderPassEvent evt, Material copyDepthMaterial, bool shouldClear = false, bool copyToDepth = false, bool copyResolvedDepth = false)
+        public CopyDepthPass(RenderPassEvent evt, Shader copyDepthShader, bool shouldClear = false, bool copyToDepth = false, bool copyResolvedDepth = false, string customPassName = null)
         {
-            base.profilingSampler = new ProfilingSampler(nameof(CopyDepthPass));
+            base.profilingSampler = customPassName != null ? new ProfilingSampler(customPassName) : new ProfilingSampler(nameof(CopyDepthPass));
             m_PassData = new PassData();
             CopyToDepth = copyToDepth;
-            m_CopyDepthMaterial = copyDepthMaterial;
+            m_CopyDepthMaterial = CoreUtils.CreateEngineMaterial(copyDepthShader);
             renderPassEvent = evt;
             m_CopyResolvedDepth = copyResolvedDepth;
             m_ShouldClear = shouldClear;
@@ -57,6 +58,14 @@ namespace UnityEngine.Rendering.Universal.Internal
             this.source = source;
             this.destination = destination;
             this.MssaSamples = -1;
+        }
+
+        /// <summary>
+        /// Cleans up resources used by the pass.
+        /// </summary>
+        public void Dispose()
+        {
+            CoreUtils.Destroy(m_CopyDepthMaterial);
         }
 
         /// <inheritdoc />
@@ -101,6 +110,13 @@ namespace UnityEngine.Rendering.Universal.Internal
             m_PassData.cameraData = renderingData.frameData.Get<UniversalCameraData>();
             var cmd = renderingData.commandBuffer;
             cmd.SetGlobalTexture("_CameraDepthAttachment", source.nameID);
+#if ENABLE_VR && ENABLE_XR_MODULE
+            if (m_PassData.cameraData.xr.enabled)
+            {
+                if (m_PassData.cameraData.xr.supportsFoveatedRendering)
+                    cmd.SetFoveatedRenderingMode(FoveatedRenderingMode.Disabled);
+            }
+#endif
             ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(cmd), m_PassData, this.source, this.destination);
         }
 
@@ -172,9 +188,6 @@ namespace UnityEngine.Rendering.Universal.Internal
 #if ENABLE_VR && ENABLE_XR_MODULE
                 if (passData.cameraData.xr.enabled)
                 {
-                    if (passData.cameraData.xr.supportsFoveatedRendering)
-                        cmd.SetFoveatedRenderingMode(FoveatedRenderingMode.Disabled);
-
                     isGameViewFinalTarget |= new RenderTargetIdentifier(destination.nameID, 0, CubemapFace.Unknown, 0) == new RenderTargetIdentifier(passData.cameraData.xr.renderTarget, 0, CubemapFace.Unknown, 0);
                 }
 #endif

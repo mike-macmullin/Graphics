@@ -21,7 +21,6 @@ namespace UnityEditor.VFX.Block
         [VFXSetting(VFXSettingAttribute.VisibleFlags.InInspector)]
         public CustomAttributeUtility.Signature AttributeType = CustomAttributeUtility.Signature.Float;
 
-        public override string libraryName => $"{VFXBlockUtility.GetNameString(Composition)} {ObjectNames.NicifyVariableName(attribute)}";
         public override string name => VFXBlockUtility.GetNameString(Composition) + " '" + attribute + "' " + VFXBlockUtility.GetNameString(Random) + " (" + AttributeType + ")";
         public override VFXContextType compatibleContexts => VFXContextType.InitAndUpdateAndOutput;
         public override VFXDataType compatibleData => VFXDataType.Particle;
@@ -103,8 +102,8 @@ namespace UnityEditor.VFX.Block
             setAttribute.attribute = vfxAttribute.name;
             setAttribute.Composition = Composition;
             setAttribute.ResyncSlots(true);
+            ReplaceModel(setAttribute, this, true, false);
             VFXBlock.CopyInputLinks(setAttribute, this);
-            ReplaceModel(setAttribute, this);
         }
 
         internal sealed override void GenerateErrors(VFXInvalidateErrorReporter manager)

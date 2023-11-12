@@ -47,6 +47,11 @@ namespace UnityEngine.Rendering
 
         #endregion
 
+        internal static DebugRendererBatcherStats GetDebugStats()
+        {
+            return s_Instance?.m_BatchersContext.debugStats;
+        }
+
         private void InsertIntoPlayerLoop()
         {
             var rootLoop = LowLevel.PlayerLoop.GetCurrentPlayerLoop();
@@ -150,15 +155,6 @@ namespace UnityEngine.Rendering
             return new GPUResidentDrawerSettings();
         }
 
-        private static GPUResidentDrawerResources GetResourcesFromRPAsset()
-        {
-            var renderPipelineAsset = GraphicsSettings.currentRenderPipeline;
-            if (renderPipelineAsset is IGPUResidentRenderPipeline mbAsset)
-                return mbAsset.gpuResidentDrawerResources;
-
-            return null;
-        }
-
         private static bool IsForcedOnViaCommandLine()
         {
 #if UNITY_EDITOR && GPU_RESIDENT_DRAWER_ALLOW_FORCE_ON
@@ -170,6 +166,7 @@ namespace UnityEngine.Rendering
 #endif
             return false;
         }
+
 		internal static void Reinitialize()
         {
 			Reinitialize(false);
@@ -178,7 +175,6 @@ namespace UnityEngine.Rendering
         internal static void Reinitialize(bool forceSupported)
         {
             var settings = GetGlobalSettingsFromRPAsset();
-            var resources = GetResourcesFromRPAsset();
 
             // When compiling in the editor, we include a try catch block around our initialization logic to avoid leaving the editor window in a broken state if something goes wrong.
             // We can probably remove this in the future once the edit mode functionality stabilizes, but for now it's safest to have a fallback.
@@ -186,7 +182,7 @@ namespace UnityEngine.Rendering
             try
 #endif
             {
-                Recreate(settings, resources, forceSupported);
+                Recreate(settings, forceSupported);
             }
 #if UNITY_EDITOR
             catch (Exception exception)
@@ -207,22 +203,12 @@ namespace UnityEngine.Rendering
             s_Instance = null;
         }
 
-        private static void Recreate(GPUResidentDrawerSettings settings, GPUResidentDrawerResources resources, bool forceSupported)
+        private static void Recreate(GPUResidentDrawerSettings settings, bool forceSupported)
         {
             if (IsForcedOnViaCommandLine())
             {
                 forceSupported = true;
                 settings.mode = GPUResidentDrawerMode.InstancedDrawing;
-#if UNITY_EDITOR
-                // If we force the batcher on we might not get resources from the SRP global asset
-                // Create a temp object here instead.
-                if (resources is null)
-                {
-                    resources = ScriptableObject.CreateInstance<GPUResidentDrawerResources>();
-                    resources.hideFlags = HideFlags.HideAndDontSave;
-                    ResourceReloader.ReloadAllNullIn(resources, "Packages/com.unity.render-pipelines.core/");
-                }
-#endif
             }
 
             CleanUp();
@@ -262,7 +248,7 @@ namespace UnityEngine.Rendering
                 return;
             }
 
-            s_Instance = new GPUResidentDrawer(settings, resources, 4096);
+            s_Instance = new GPUResidentDrawer(settings, 4096);
         }
 
         internal GPUResidentBatcher batcher { get => m_Batcher; }
@@ -278,6 +264,9 @@ namespace UnityEngine.Rendering
         private MeshRendererDrawer m_MeshRendererDrawer;
 
 #if UNITY_EDITOR
+        private NativeList<int> m_FrameCameraIDs;
+        private bool m_FrameUpdateNeeded = false;
+
         static GPUResidentDrawer()
         {
 			Lightmapping.bakeCompleted += Reinitialize;
@@ -286,8 +275,9 @@ namespace UnityEngine.Rendering
 
         private List<Object> m_ChangedMaterials;
 
-        private GPUResidentDrawer(GPUResidentDrawerSettings settings, GPUResidentDrawerResources resources, int maxInstanceCount)
+        private GPUResidentDrawer(GPUResidentDrawerSettings settings, int maxInstanceCount)
         {
+            var resources = GraphicsSettings.GetRenderPipelineSettings<GPUResidentDrawerResources>();
             var renderPipelineAsset = GraphicsSettings.currentRenderPipeline;
             var mbAsset = renderPipelineAsset as IGPUResidentRenderPipeline;
             Debug.Assert(mbAsset != null, "No compatible Render Pipeline found");
@@ -298,6 +288,7 @@ namespace UnityEngine.Rendering
             var rbcDesc = RenderersBatchersContextDesc.NewDefault();
             rbcDesc.instanceNumInfo = new InstanceNumInfo(meshRendererNum: maxInstanceCount);
             rbcDesc.supportDitheringCrossFade = settings.supportDitheringCrossFade;
+            rbcDesc.enableCullerDebugStats = true; // for now, always allow the possibility of reading counter stats from the cullers.
 
             var instanceCullingBatcherDesc = InstanceCullingBatcherDesc.NewDefault();
 #if UNITY_EDITOR
@@ -325,6 +316,7 @@ namespace UnityEngine.Rendering
 
 #if UNITY_EDITOR
             AssemblyReloadEvents.beforeAssemblyReload += OnAssemblyReload;
+            m_FrameCameraIDs = new NativeList<int>(1, Allocator.Persistent);
 #endif
             SceneManager.sceneLoaded += OnSceneLoaded;
 
@@ -340,6 +332,8 @@ namespace UnityEngine.Rendering
 
 #if UNITY_EDITOR
             AssemblyReloadEvents.beforeAssemblyReload -= OnAssemblyReload;
+            if (m_FrameCameraIDs.IsCreated)
+                m_FrameCameraIDs.Dispose();
 #endif
             SceneManager.sceneLoaded -= OnSceneLoaded;
 
@@ -380,10 +374,41 @@ namespace UnityEngine.Rendering
         {
             if (s_Instance is null)
                 return;
+#if UNITY_EDITOR
+            EditorFrameUpdate(cameras);
+#endif
 
             m_Batcher.OnBeginContextRendering();
         }
 
+
+#if UNITY_EDITOR
+        // If running in the editor the player loop might not run
+        // In order to still have a single frame update we keep track of the camera ids
+        // A frame update happens in case the first camera is rendered again
+        private void EditorFrameUpdate(List<Camera> cameras)
+        {
+            bool newFrame = false;
+            foreach (Camera camera in cameras)
+            {
+                int instanceID = camera.GetInstanceID();
+                if (m_FrameCameraIDs.Length == 0 || m_FrameCameraIDs.Contains(instanceID))
+                {
+                    newFrame = true;
+                    m_FrameCameraIDs.Clear();
+                }
+                m_FrameCameraIDs.Add(instanceID);
+            }
+
+            if (newFrame)
+            {
+                if (m_FrameUpdateNeeded)
+                    m_Batcher.UpdateFrame();
+                else
+                    m_FrameUpdateNeeded = true;
+            }
+        }
+#endif
         private void OnEndContextRendering(ScriptableRenderContext context, List<Camera> cameras)
         {
             if (s_Instance is null)
@@ -434,6 +459,10 @@ namespace UnityEngine.Rendering
             m_BatchersContext.UpdateInstanceMotions();
 
             m_Batcher.UpdateFrame();
+
+#if UNITY_EDITOR
+            m_FrameUpdateNeeded = false;
+#endif
         }
 
         private void ProcessLightmapSettings(NativeArray<int> changed, NativeArray<int> destroyed)

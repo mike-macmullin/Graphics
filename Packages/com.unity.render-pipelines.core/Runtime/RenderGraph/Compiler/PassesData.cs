@@ -73,6 +73,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
         public bool asyncCompute;
         public bool hasSideEffects;
         public bool culled;
+        public bool hasFoveatedRasterization;
         public int tag; // Arbitrary per node int used by various graph analysis tools
 
         public PassMergeState mergeState;
@@ -103,7 +104,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
         public int fragmentInfoVolumeDepth;
         public int fragmentInfoSamples;
         public bool fragmentInfoHasDepth;
-        
+
         public bool insertGraphicsFence; // Whether this pass should insert a fence into the command buffer
         public int waitOnGraphicsFencePassId; // -1 if no fence wait is needed, otherwise the passId to wait on
 
@@ -116,7 +117,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             type = pass.type;
             asyncCompute = pass.enableAsyncCompute;
             hasSideEffects = !pass.allowPassCulling;
-
+            hasFoveatedRasterization = pass.enableFoveatedRasterization;
             mergeState = PassMergeState.None;
             nativePassIndex = -1;
             nativeSubPassIndex = -1;
@@ -148,7 +149,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             fragmentInfoVolumeDepth = 0;
             fragmentInfoSamples = 0;
             fragmentInfoHasDepth = false;
-            
+
             insertGraphicsFence = false;
             waitOnGraphicsFencePassId = -1;
         }
@@ -160,6 +161,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             type = pass.type;
             asyncCompute = pass.enableAsyncCompute;
             hasSideEffects = !pass.allowPassCulling;
+            hasFoveatedRasterization = pass.enableFoveatedRasterization;
 
             mergeState = PassMergeState.None;
             nativePassIndex = -1;
@@ -192,7 +194,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             fragmentInfoVolumeDepth = 0;
             fragmentInfoSamples = 0;
             fragmentInfoHasDepth = false;
-            
+
             insertGraphicsFence = false;
             waitOnGraphicsFencePassId = -1;
         }
@@ -218,7 +220,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly ReadOnlySpan<ResourceHandle> FirstUsedResources(CompilerContextData ctx)
             => ctx.createData.MakeReadOnlySpan(firstCreate, numCreated);
-        
+
         // Loop over this pass's random write textures returned as PassFragmentData
         public ReadOnlySpan<PassRandomWriteData> RandomWriteTextures(CompilerContextData ctx)
          => ctx.randomAccessResourceData.MakeReadOnlySpan(firstRandomAccessResource, numRandomAccessResources);
@@ -441,12 +443,12 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
     {
         NotOptimized, // Optimize never ran on this pass
         TargetSizeMismatch, // Target Sizes or msaa samples don't match
-        DepthBufferUseMismatch, // One pass is using depth buffer and the other not
         NextPassReadsTexture, // The next pass reads data written by this pass as a texture
         NonRasterPass, // The next pass is a non-raster pass
         DifferentDepthTextures, // The next pass uses a different depth texture (and we only allow one in a whole NRP)
         AttachmentLimitReached, // Adding the next pass would have used more attachments than allowed
         EndOfGraph, // The last pass in the graph was reached
+        FRStateMismatch, // One pass is using foveated rendering and the other not
         Merged // I actually got merged
     }
 
@@ -470,6 +472,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             "The next pass uses a different depth buffer. All passes in the native render pass need to use the same depth buffer.",
             "The limit of 8 native pass attachments would be exceeded when merging with the next pass.",
             "This is the last pass in the graph, there are no other passes to merge.",
+            "The the next pass uses a different foveated rendering state",
             "The next pass got merged into this pass.",
         };
     }
@@ -488,8 +491,10 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
         public FixedAttachmentArray<NativePassAttachment> attachments;
         public int width;
         public int height;
+        public int volumeDepth;
         public int samples;
         public bool hasDepth;
+        public bool hasFoveatedRasterization;
 
 #if UNITY_EDITOR
         public FixedAttachmentArray<LoadAudit> loadAudit;
@@ -509,9 +514,11 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
 
             width = pass.fragmentInfoWidth;
             height = pass.fragmentInfoHeight;
+            volumeDepth = pass.fragmentInfoVolumeDepth;
             samples = pass.fragmentInfoSamples;
             hasDepth = pass.fragmentInfoHasDepth;
-
+            hasFoveatedRasterization = pass.hasFoveatedRasterization;
+            
 #if UNITY_EDITOR
             loadAudit = new FixedAttachmentArray<LoadAudit>();
             storeAudit = new FixedAttachmentArray<StoreAudit>();
@@ -586,26 +593,27 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
                 // Easy early outs, sizes mismatch
                 if (nativePass.width != passToMerge.fragmentInfoWidth ||
                     nativePass.height != passToMerge.fragmentInfoHeight ||
+                    nativePass.volumeDepth != passToMerge.fragmentInfoVolumeDepth ||
                     nativePass.samples != passToMerge.fragmentInfoSamples)
                 {
                     return new PassBreakAudit(PassBreakReason.TargetSizeMismatch, passIdToMerge);
                 }
 
-                // Not same depth enabled state
-                if (nativePass.hasDepth != passToMerge.fragmentInfoHasDepth)
-                {
-                    return new PassBreakAudit(PassBreakReason.DepthBufferUseMismatch, passIdToMerge);
-                }
-
                 // Easy early outs, different depth buffers we only allow a single depth for the whole NRP for now ?!?
                 // Depth buffer is by-design always at index 0
-                if (nativePass.hasDepth)
+                if (nativePass.hasDepth && passToMerge.fragmentInfoHasDepth)
                 {
                     ref readonly var firstFragment = ref contextData.fragmentData.ElementAt(passToMerge.firstFragment);
                     if (nativePass.fragments[0].resource.index != firstFragment.resource.index)
                     {
                         return new PassBreakAudit(PassBreakReason.DifferentDepthTextures, passIdToMerge);
                     }
+                }
+
+                // We do not support foveation state changes within the renderpass due to platform limitation
+                if (nativePass.hasFoveatedRasterization != passToMerge.hasFoveatedRasterization)
+                {
+                    return new PassBreakAudit(PassBreakReason.FRStateMismatch, passIdToMerge);
                 }
             }
 
@@ -713,6 +721,17 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             passToMerge.nativePassIndex = activeNativePassId;
             nativePass.numGraphPasses++;
 
+            // Depth needs special handling if the native pass doesn't have depth and merges with a pass that does
+            // as we require the depth attachment to be at index 0
+            if (!nativePass.hasDepth && passToMerge.fragmentInfoHasDepth)
+            {
+                nativePass.hasDepth = true;
+                nativePass.fragments.Add(contextData.fragmentData[passToMerge.firstFragment]);
+                var size = nativePass.fragments.size;
+                if (size > 1)
+                    (nativePass.fragments[0], nativePass.fragments[size-1]) = (nativePass.fragments[size-1], nativePass.fragments[0]);
+            }
+
             // Update versions and flags of existing attachments and
             // add any new attachments
             foreach (ref readonly var newAttach in passToMerge.Fragments(contextData))
@@ -770,7 +789,7 @@ namespace UnityEngine.Experimental.Rendering.RenderGraphModule.NativeRenderPassC
             }
 
             SetPassStatesForNativePass(contextData, activeNativePassId);
-        
+
             return passBreakAudit;
         }
 

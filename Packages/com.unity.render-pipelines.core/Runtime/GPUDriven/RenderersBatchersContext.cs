@@ -16,6 +16,7 @@ namespace UnityEngine.Rendering
         public InstanceNumInfo instanceNumInfo;
         public bool supportDitheringCrossFade;
         public bool enableBoundingSpheresInstanceData;
+        public bool enableCullerDebugStats;
 
         public static RenderersBatchersContextDesc NewDefault()
         {
@@ -71,7 +72,11 @@ namespace UnityEngine.Rendering
         private GPUDrivenLODGroupDataCallback m_UpdateLODGroupCallback;
         private GPUDrivenLODGroupDataCallback m_TransformLODGroupCallback;
 
-        public RenderersBatchersContext(in RenderersBatchersContextDesc desc, GPUDrivenProcessor gpuDrivenProcessor, GPUResidentDrawerResources resources)
+        private DebugRendererBatcherStats m_DebugStats;
+
+        internal DebugRendererBatcherStats debugStats { get => m_DebugStats; }
+
+        public RenderersBatchersContext(in RenderersBatchersContextDesc desc, GPUDrivenProcessor gpuDrivenProcessor, GPUResidentDrawerResources resources) 
         {
             m_Resources = resources;
             m_GPUDrivenProcessor = gpuDrivenProcessor;
@@ -101,6 +106,7 @@ namespace UnityEngine.Rendering
             m_UpdateLODGroupCallback = UpdateLODGroupData;
             m_TransformLODGroupCallback = TransformLODGroupData;
 
+            m_DebugStats = desc.enableCullerDebugStats ? new DebugRendererBatcherStats() : null;
         }
 
         public void Dispose()
@@ -121,6 +127,9 @@ namespace UnityEngine.Rendering
 
             m_UpdateLODGroupCallback = null;
             m_TransformLODGroupCallback = null;
+
+            m_DebugStats?.Dispose();
+            m_DebugStats = null;
         }
 
         public int GetMaxInstancesOfType(InstanceType instanceType)
